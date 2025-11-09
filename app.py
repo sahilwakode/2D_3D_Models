@@ -46,7 +46,7 @@ def save_image_numpy(ndarr, fp):
 
 weight_dtype = torch.float16
 
-_TITLE = '''Sahil 3D Models'''
+_TITLE = '''Era3D: High-Resolution Multiview Diffusion using Efficient Row-wise Attention'''
 _DESCRIPTION = '''
 <div>
 Generate consistent high-resolution multi-view normals maps and color images.
@@ -293,59 +293,58 @@ def run_demo():
     from utils.misc import load_config
     from omegaconf import OmegaConf
 
-    # Load YAML config
+    # parse YAML config to OmegaConf
     cfg = load_config("./configs/test_unclip-512-6view.yaml")
+    # print(cfg)
     schema = OmegaConf.structured(TestConfig)
     cfg = OmegaConf.merge(schema, cfg)
 
     pipeline = load_era3d_pipeline(cfg)
     torch.set_grad_enabled(False)
+
+    
     predictor = sam_init()
 
-    # --- Custom Theme ---
-    classy_theme = gr.themes.Soft(
-        primary_hue="slate",
-        secondary_hue="blue",
-    ).set(
-        body_background_fill="*neutral_50",
-        block_background_fill="white",
-        block_shadow="*shadow_sm",
-        block_border_width="1px",
-        button_primary_background_fill="*slate_700",
-        button_primary_background_fill_hover="*slate_800",
-        button_primary_text_color="white",
-        button_secondary_background_fill="*neutral_200",
-        button_secondary_background_fill_hover="*neutral_300",
-        input_background_fill="*neutral_100",
+
+    custom_theme = gr.themes.Soft(primary_hue="blue").set(
+        button_secondary_background_fill="*neutral_100", button_secondary_background_fill_hover="*neutral_200"
     )
+    custom_css = '''#disp_image {
+        text-align: center; /* Horizontally center the content */
+    }'''
+    
 
-    classy_css = """
-    #title {
-        text-align: center;
-        font-size: 2.2em;
-        font-weight: 600;
-        color: #1e293b;
-    }
-    #subtitle {
-        text-align: center;
-        font-size: 1.05em;
-        color: #475569;
-        margin-bottom: 20px;
-    }
-    .gradio-container {
-        max-width: 1100px !important;
-        margin: auto;
-    }
-    """
-
-    with gr.Blocks(title=_TITLE, theme=classy_theme, css=classy_css) as demo:
-        gr.HTML(f"<div id='title'>{_TITLE}</div>")
-        gr.HTML(f"<div id='subtitle'>Generate consistent, high-resolution multi-view normal maps and color images</div>")
-
+    with gr.Blocks(title=_TITLE, theme=custom_theme, css=custom_css) as demo:
         with gr.Row():
             with gr.Column(scale=1):
-                input_image = gr.Image(type='pil', image_mode='RGBA', height=360, label='Upload Input Image')
-                gr.Markdown("#### Example Images")
+                gr.Markdown('# ' + _TITLE)
+        gr.Markdown(_DESCRIPTION)
+        with gr.Row(variant='panel'):
+            with gr.Column(scale=1):
+                input_image = gr.Image(type='pil', image_mode='RGBA', height=320, label='Input image')
+
+            with gr.Column(scale=1):
+                processed_image_highres = gr.Image(type='pil', image_mode='RGBA', visible=False)
+               
+                processed_image = gr.Image(
+                    type='pil',
+                    label="Processed Image",
+                    interactive=False,
+                    # height=320,
+                    image_mode='RGBA',
+                    elem_id="disp_image",
+                    visible=True,
+                )
+            # with gr.Column(scale=1):
+            #     ## add 3D Model
+            #     obj_3d = gr.Model3D(
+            #                         # clear_color=[0.0, 0.0, 0.0, 0.0], 
+            #                         label="3D Model", height=320, 
+            #                         # camera_position=[0,0,2.0]
+            #                         )
+                
+        with gr.Row(variant='panel'):
+            with gr.Column(scale=1):
                 example_folder = os.path.join(os.path.dirname(__file__), "./examples")
                 example_fns = [os.path.join(example_folder, example) for example in os.listdir(example_folder)]
                 gr.Examples(
@@ -353,63 +352,61 @@ def run_demo():
                     inputs=[input_image],
                     outputs=[input_image],
                     cache_examples=False,
-                    examples_per_page=12,
+                    label='Examples (click one of the images below to start)',
+                    examples_per_page=30,
                 )
-
             with gr.Column(scale=1):
-                processed_image = gr.Image(
-                    type='pil',
-                    label="Processed Image Preview",
-                    image_mode='RGBA',
-                    height=360,
-                    interactive=False,
-                )
-                processed_image_highres = gr.Image(type='pil', image_mode='RGBA', visible=False)
-
-                with gr.Accordion("⚙️ Advanced Options", open=False):
-                    input_processing = gr.CheckboxGroup(
-                        ['Background Removal'],
-                        label='Preprocessing Steps',
-                        value=['Background Removal'],
-                        info='Untick if the input already has alpha channel.',
-                    )
-                    output_processing = gr.CheckboxGroup(
-                        ['Write Results'],
-                        label='Output Options',
-                        value=['Write Results'],
-                    )
+                with gr.Row():
+                    with gr.Column():
+                        with gr.Accordion('Advanced options', open=True):
+                            input_processing = gr.CheckboxGroup(
+                                ['Background Removal'],
+                                label='Input Image Preprocessing',
+                                value=['Background Removal'],
+                                info='untick this, if masked image with alpha channel',
+                            )
+                    with gr.Column():
+                        with gr.Accordion('Advanced options', open=False):
+                            output_processing = gr.CheckboxGroup(
+                                ['Write Results'], label='write the results in mv_res folder', value=['Write Results']
+                            )
                     with gr.Row():
-                        scale_slider = gr.Slider(1, 5, value=3, step=1, label='Guidance Scale')
-                        steps_slider = gr.Slider(15, 100, value=40, step=1, label='Diffusion Steps')
+                        with gr.Column():
+                            scale_slider = gr.Slider(1, 5, value=3, step=1, label='Classifier Free Guidance Scale')
+                        with gr.Column():
+                            steps_slider = gr.Slider(15, 100, value=40, step=1, label='Number of Diffusion Inference Steps')
                     with gr.Row():
-                        seed = gr.Number(600, label='Seed')
-                        crop_size = gr.Number(420, label='Crop Size')
+                        with gr.Column():
+                            seed = gr.Number(600, label='Seed', info='100 for digital portraits')
+                        with gr.Column():
+                            crop_size = gr.Number(420, label='Crop size', info='380 for digital portraits')
 
-                run_btn = gr.Button('🚀 Generate Multi-view Normals & Colors', variant='primary', interactive=True)
-
+                        mode = gr.Textbox('train', visible=False)
+                        data_dir = gr.Textbox('outputs', visible=False)
+                    # with gr.Row():
+                    #     method = gr.Radio(choices=['instant-nsr-pl', 'NeuS'], label='Method (Default: instant-nsr-pl)', value='instant-nsr-pl')
+                run_btn = gr.Button('Generate Normals and Colors', variant='primary', interactive=True)
+                # recon_btn = gr.Button('Reconstruct 3D model', variant='primary', interactive=True)
+                # gr.Markdown("<span style='color:red'>First click Generate button, then click Reconstruct button. Reconstruction may cost several minutes.</span>")
+        
         with gr.Row():
-            with gr.Column():
-                view_gallery = gr.Gallery(label='Predicted Multi-view Images', columns=3, height=320)
-            with gr.Column():
-                normal_gallery = gr.Gallery(label='Predicted Multi-view Normals', columns=3, height=320)
-
-        # --- Functional pipeline connections ---
+            view_gallery = gr.Gallery(label='Multiview Images')
+            normal_gallery = gr.Gallery(label='Multiview Normals')
+            
+        print('Launching...')
         run_btn.click(
-            fn=partial(preprocess, predictor),
-            inputs=[input_image, input_processing],
-            outputs=[processed_image_highres, processed_image],
-            queue=True,
+            fn=partial(preprocess, predictor), inputs=[input_image, input_processing], outputs=[processed_image_highres, processed_image], queue=True
         ).success(
             fn=partial(run_pipeline, pipeline, cfg),
             inputs=[processed_image_highres, scale_slider, steps_slider, seed, crop_size, output_processing],
             outputs=[view_gallery, normal_gallery],
         )
+        # recon_btn.click(
+        #     process_3d, inputs=[mode, data_dir, scale_slider, crop_size], outputs=[obj_3d]
+        # )
 
-        gr.Markdown("---")
-        gr.HTML("<p style='text-align:center; color:#64748b; font-size:0.9em;'>© 2025 Sahil | 3D Reconstruction Research Demo</p>")
-
-        demo.queue(concurrency_count=4).launch(share=True)
-
+        demo.queue().launch(share=True, max_threads=80)
+        
 
 if __name__ == '__main__':
     fire.Fire(run_demo)
