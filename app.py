@@ -46,13 +46,10 @@ def save_image_numpy(ndarr, fp):
 
 weight_dtype = torch.float16
 
-_TITLE = '''Era3D: High-Resolution Multiview Diffusion using Efficient Row-wise Attention'''
+_TITLE = '''MTP-Project: High-Resolution Multiview Diffusion using Efficient Row-wise Attention'''
 _DESCRIPTION = '''
 <div>
 Generate consistent high-resolution multi-view normals maps and color images.
-</div>
-<div>
-The demo does not include the mesh reconstruction part, please visit <a href="https://github.com/pengHTYX/Era3D"><img src='https://img.shields.io/github/stars/pengHTYX/Era3D?style=social' style="display: inline-block; vertical-align: middle;"/></a> to get a textured mesh.
 </div>
 '''
 _GPU_ID = 0
